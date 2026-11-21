@@ -32,7 +32,7 @@ const careerPlans:Record<string,{focus:string[];roadmap:string[]}>={
  'UI/UX Designer':{focus:['User Research','Figma','Prototyping','Accessibility','Usability Testing'],roadmap:['User research and problem framing','Information architecture and user flows','Figma foundations and visual systems','Prototyping and usability testing','Accessible portfolio case studies','Design collaboration and interviews']},
  'Cloud Engineer':{focus:['Linux','Networking','Cloud Fundamentals','Containers','Infrastructure as Code'],roadmap:['Linux and networking foundations','Cloud concepts and identity security','Containers and deployment workflows','Infrastructure as code and automation','Monitoring, reliability and cost controls','Cloud projects and interview practice']},
 };
-function Brand({small=false}:{small?:boolean}) {return <div className={'brand '+(small?'brand-compact':'')}><img src="/buildbridge-logo.png" alt="BuildBridge — Bridging traditional learning to real-world work"/></div>}
+function Brand({small=false}:{small?:boolean}) {return <div className={'brand '+(small?'brand-compact':'')}><img src="/buildbridge-logo-new.png" alt="BuildBridge — Bridging traditional learning to real-world work"/></div>}
 function Pill({children,tone='green'}:{children:React.ReactNode;tone?:string}){return <span className={'pill '+tone}>{children}</span>}
 function ProfileAvatar({src,name,className='avatar'}:{src:string;name:string;className?:string}){return <div className={className}>{src?<img src={src} alt=""/>:<span>{(name||'U').slice(0,1).toUpperCase()}</span>}</div>}
 function clampFloatingPosition(x:number,y:number,width:number,height:number){return {x:Math.max(8,Math.min(x,window.innerWidth-width-8)),y:Math.max(8,Math.min(y,window.innerHeight-height-8))};}

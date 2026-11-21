@@ -302,7 +302,7 @@ export function CertificateVault({ certificates }: { certificates: CertificateRe
                   <article className="certificate-sheet" id="certificate-print-root">
                     <div className="certificate-frame">
                       <header className="certificate-header">
-                        <img className="certificate-logo" src="/buildbridge-logo.png" alt="BuildBridge" />
+                        <img className="certificate-logo" src="/buildbridge-logo-new.png" alt="BuildBridge" />
                         <div><b>{certificate.issuer_name}</b><small>Learning &amp; Project Credentials</small></div>
                       </header>
                       <div className="certificate-gold-divider" />

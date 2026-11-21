@@ -2,5 +2,5 @@ import { AuthForm } from '@/components/AuthForm';
 import Image from 'next/image';
 
 export default function ResetPasswordPage() {
-  return <main className="auth-page"><div className="auth-mark"><Image src="/buildbridge-logo.png" alt="BuildBridge" width={230} height={120} priority/><p>Learn it. Build it. Prove it.</p></div><AuthForm mode="reset"/></main>;
+  return <main className="auth-page"><div className="auth-mark"><Image src="/buildbridge-logo-new.png" alt="BuildBridge" width={230} height={120} priority/><p>Learn it. Build it. Prove it.</p></div><AuthForm mode="reset"/></main>;
 }

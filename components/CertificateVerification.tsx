@@ -80,7 +80,7 @@ export function CertificateVerification({ certificateCode = '' }: { certificateC
   return (
     <main className="certificate-verification-page">
       <section className="certificate-verification-card">
-        <div className="certificate-verification-brand"><img src="/buildbridge-logo.png" alt="BuildBridge" /><span>Credential verification</span></div>
+        <div className="certificate-verification-brand"><img src="/buildbridge-logo-new.png" alt="BuildBridge" /><span>Credential verification</span></div>
         <h1>Verify a certificate</h1>
         <p>Enter the certificate ID or open this page by scanning the QR code printed on a BuildBridge credential.</p>
         <form className="certificate-verify-form" onSubmit={verify}>

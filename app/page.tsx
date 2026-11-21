@@ -10,7 +10,7 @@ export default function LandingPage() {
     <main className="landing-page">
       <header className="landing-header">
         <Link href="/" className="landing-brand" aria-label="BuildBridge home">
-          <Image src="/buildbridge-logo.png" alt="BuildBridge" width={178} height={58} priority />
+          <Image src="/buildbridge-logo-new.png" alt="BuildBridge" width={178} height={58} priority />
         </Link>
         <nav aria-label="Main navigation">
           <a href="#how-it-works">How it works</a>
@@ -54,7 +54,7 @@ export default function LandingPage() {
       </section>
       <BuildJourneyPreview/>
       <section className="landing-callout" id="for-organizations"><div><span>FOR STUDENTS AND ORGANIZATIONS</span><h2>Build skills around real goals.</h2><p>Students can shape a learning journey. Organizations can participate through verified company workflows.</p></div><Link className="outline" href="/auth/sign-up">Create an account <ArrowRight size={15}/></Link></section>
-      <footer className="landing-footer"><Link href="/" className="landing-brand"><Image src="/buildbridge-logo.png" alt="BuildBridge" width={145} height={45}/></Link><span>Bridging traditional learning to real-world work.</span><Link href="/auth/sign-in">Sign in</Link></footer>
+      <footer className="landing-footer"><Link href="/" className="landing-brand"><Image src="/buildbridge-logo-new.png" alt="BuildBridge" width={145} height={45}/></Link><span>Bridging traditional learning to real-world work.</span><Link href="/auth/sign-in">Sign in</Link></footer>
     </main>
     </LandingExperience>
   );
