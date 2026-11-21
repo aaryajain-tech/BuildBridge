@@ -1,5 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseConfiguration } from '@/lib/supabase-config';
 
 let browserClient: SupabaseClient | null = null;
 let browserClientRememberMode: boolean | null = null;
@@ -74,13 +75,12 @@ function getBrowserCookies() {
  */
 export function createClient(options?: { rememberMe?: boolean }): SupabaseClient | null {
   if (typeof window === 'undefined') return null;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return null;
+  const configuration = getSupabaseConfiguration();
+  if (configuration.error) return null;
 
   const rememberMe = options?.rememberMe ?? readRememberPreference();
   if (!browserClient || browserClientRememberMode !== rememberMe) {
-    browserClient = createBrowserClient(url, key, {
+    browserClient = createBrowserClient(configuration.url, configuration.key, {
       isSingleton: false,
       cookies: {
         getAll: getBrowserCookies,

@@ -1,36 +1,53 @@
 import { NextResponse } from 'next/server';
+import { getSupabaseConfiguration } from '@/lib/supabase-config';
 
 export async function GET() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const configuration = getSupabaseConfiguration();
+  let supabaseStatus = configuration.error || 'not_checked';
+  let supabaseHttpStatus: number | null = null;
+  let supabaseReachable: boolean | null = null;
+  if (!configuration.error) {
+    try {
+      const response = await fetch(`${configuration.url}/auth/v1/settings`, {
+        headers: { apikey: configuration.key },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      });
+      supabaseHttpStatus = response.status;
+      supabaseReachable = response.ok;
+      supabaseStatus = response.ok
+        ? 'ready'
+        : response.status === 401 || response.status === 403
+          ? 'invalid_api_key'
+          : response.status === 404
+            ? 'invalid_project_url'
+            : response.status >= 500
+            ? 'project_unavailable'
+            : 'supabase_rejected_request';
+    } catch {
+      supabaseReachable = false;
+      supabaseStatus = 'network_connectivity_failure';
+    }
+  }
   const result: {
     app: string;
     supabaseConfigured: boolean;
     supabaseReachable: boolean | null;
     supabaseHttpStatus: number | null;
+    supabaseStatus: string;
     geminiConfigured: boolean;
     youtubeConfigured: boolean;
   } = {
     app: 'BuildBridge',
-    supabaseConfigured: Boolean(url && key),
-    supabaseReachable: null,
-    supabaseHttpStatus: null,
+    supabaseConfigured: !configuration.error,
+    supabaseReachable,
+    supabaseHttpStatus,
+    supabaseStatus,
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
     youtubeConfigured: Boolean(process.env.YOUTUBE_API_KEY),
   };
-
-  if (url && key) {
-    try {
-      const response = await fetch(`${url.replace(/\/$/, '')}/auth/v1/settings`, {
-        headers: { apikey: key },
-        cache: 'no-store',
-      });
-      result.supabaseHttpStatus = response.status;
-      result.supabaseReachable = response.ok;
-    } catch {
-      result.supabaseReachable = false;
-    }
-  }
-
-  return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json(result, {
+    status: supabaseStatus === 'ready' ? 200 : 503,
+    headers: { 'Cache-Control': 'no-store' },
+  });
 }

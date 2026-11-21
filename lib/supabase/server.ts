@@ -1,15 +1,15 @@
 import 'server-only';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { getSupabaseConfiguration } from '@/lib/supabase-config';
 
 export async function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return null;
+  const configuration = getSupabaseConfiguration();
+  if (configuration.error) return null;
 
   const cookieStore = await cookies();
   const sessionOnly = cookieStore.get('buildbridge-remember')?.value === 'session';
-  return createServerClient(url, key, {
+  return createServerClient(configuration.url, configuration.key, {
     cookies: {
       getAll() {
         return cookieStore.getAll();

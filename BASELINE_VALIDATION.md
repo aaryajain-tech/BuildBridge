@@ -25,7 +25,7 @@
 ## Gaps confirmed before edits
 
 - Sign-up UI has no phone-number field, although phone is intended to be optional and the profile schema contains `phone_number`.
-- OAuth controls are available only on sign-in, and the current UI supports Google, GitHub, Microsoft/Azure and Facebook, but not LinkedIn OIDC.
+- OAuth controls are available only on sign-in, and the current UI supports Google, GitHub, Microsoft/Azure and LinkedIn OIDC.
 - The sign-up screen does not expose social signup controls or securely carry the selected account intent into an OAuth callback.
 - Sign-in has no Remember me control or persistence selection.
 - The public landing page still renders static three-card feature content rather than the specified animated Learn → Build → Prove → Earn interactive preview.

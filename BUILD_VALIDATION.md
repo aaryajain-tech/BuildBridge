@@ -1,43 +1,41 @@
-# BuildBridge change and validation report
+# BuildBridge Change and Validation Report
 
 Date: 21 November 2026
 
-## Baseline preserved
+## Changes Made
 
-The submitted ZIP was extracted to a separate working directory. The existing schema and working flows were inspected before changes. Existing project assignment, milestone evidence, review decisions, certificate validation, company domain verification, admin provisioning, notification delivery and private avatar paths were kept in place. Changes are additive and targeted; no existing table was dropped or renamed.
+- `components/WorkspaceApp.tsx`: repaired the student Opportunities JSX; match criteria now use the authenticated workspace profile with `initialProfile` fallback; company opportunity management uses `initialProfile.id`; legacy OAuth panel supports Google, GitHub, LinkedIn OIDC, and Microsoft only.
+- `components/SocialAuthButtons.tsx`: removed Facebook provider identifier, icon fallback, and button; retained the four supported providers.
+- `app/globals.css`: aligned provider buttons in four columns on wider screens and two columns on narrow screens.
+- `components/AuthForm.tsx`: routes signup and successful password/OAuth sign-in from intent/profile without granting roles; catches OAuth network/provider errors and always releases the busy state.
+- `app/auth/callback/route.ts`: catches session exchange failures, preserves the safe requested destination on errors, and routes default callbacks using the authenticated profile.
+- `lib/supabase-config.ts`: added public Supabase URL/key validation and actionable configuration diagnostics.
+- `lib/supabase.ts`, `lib/supabase/server.ts`, `middleware.ts`, `lib/api-auth.ts`, `lib/supabase/admin.ts`, `app/api/backend/route.ts`, `app/api/ai/route.ts`, `app/api/resources/route.ts`, `app/api/roadmap/route.ts`, and `app/api/certificates/verify/[certificateCode]/route.ts`: use validated public Supabase configuration; admin authorization also checks `ADMIN_OWNER_EMAIL`, `platform_admin_owner`, matching user ID/email, and confirmed Auth email.
+- `app/api/health/route.ts`: reports missing/invalid configuration, invalid key, unavailable project, rejected request, or network failure; returns `503` unless Supabase is ready and never returns keys.
+- `app/api/coursework/quiz/route.ts`: validates untrusted quiz answers as unknown values before grading.
+- `lib/workspace-page.tsx`, `app/workspace/page.tsx`, `app/student/dashboard/page.tsx`, `app/company/dashboard/page.tsx`, and `app/admin/page.tsx`: enforce database-profile role routing and reuse the existing workspace UI.
+- `database-schema.sql`, `supabase/auth-setup-repair.sql`, and `supabase/enable-social-auth-company-role.sql`: remove metadata/RPC company role escalation and bind RLS admin checks to the manually provisioned owner.
+- `supabase/migrations/20261121020000_existing_database_compatibility.sql`: added guarded, additive marketplace compatibility fields; preserves the existing status enum and aborts on incompatible status types or duplicate slugs.
+- `supabase/preflight-existing-database.sql`, `supabase/postflight-existing-database.sql`: added read-only catalog/schema/RLS/foreign-key/owner diagnostics.
+- `.env.example`: lists the supported anon or publishable public key alternatives.
+- `docs/DATABASE-MIGRATIONS.md`, `docs/DEPLOYMENT.md`, `QUICKSTART-WINDOWS.md`, `README.md`, `RUN-THIS-FIRST.txt`, and `BASELINE_VALIDATION.md`: document safe database ordering, Windows setup, the four OAuth providers, Vercel Preview/Production workflow, and rollback boundaries; removed Facebook setup references.
 
-## Implemented in this update
+## Automated Validation
 
-- Split-screen sign-in and signup presentation using the existing BuildBridge logo, with the tagline updated to “Bridging traditional learning to real-world work”.
-- Optional international phone input and E.164 validation, five social sign-in providers, safe OAuth callback routing, signup intent preservation, and a Remember me control backed by session versus persistent auth cookies.
-- Public registration continues to create student profiles only. Company representative signup redirects to the existing domain/administrator verification process rather than assigning a privileged role.
-- Expanded profile editor and preferences API for degree, branch/department, academic year, graduation year, GPA/percentage, coursework, location, skills and professional links.
-- Workspace screen restoration through the URL and session state, focus/visibility refresh, removal of the redundant Profile sidebar item, and clickable student dashboard metrics for projects, milestones, applications and certificates.
-- Public landing-page journey preview using shared Learn → Build → Prove → Earn definitions.
-- Coursework-first PDF/text upload, structured concept and skill mapping, suggested project directions, persisted structured maps and a separate server-graded theory knowledge check. A score of at least 80% issues a distinct `BBT-...` Theory Learning Certificate. Answer keys are stored separately from browser-visible questions.
-- Embedded YouTube watch tracking. Completion is recorded after at least 90% continuous playback; external opens are not counted as completed lessons.
-- Company opportunity creation and publishing for verified companies, structured skill/career/experience/location/compensation requirements, explainable student matching from demonstrated/company-verified evidence, and application status display.
-- Notification click-through routing to supported workspace sections.
-- New additive migration, deployment guide and updated README.
+- Node.js: `v26.13.1` (meets the Node.js 22+ requirement).
+- `npm ci`: passed; installed 434 packages. npm reported 2 audit findings (1 moderate, 1 high); no forced dependency changes were made.
+- `npm run typecheck`: passed.
+- `npm run lint`: passed with existing `<img>` optimization and React hook dependency warnings. Next.js 15 also reports `next lint` deprecation.
+- `npm run build`: passed against local `.env.local` configuration.
+- Credential-free production build: passed with all app credentials blank in an isolated child process; `.env.local` was not changed.
+- Configured production HTTP smoke: `/` `200`; `/auth/sign-in` `200`; `/auth/sign-up` `200`; `/api/health` `200` with `supabaseStatus=ready` and `supabaseReachable=true`; `/workspace` `307` to sign-in; `/student/dashboard`, `/company/dashboard`, and `/admin` each `307` to sign-in without a session.
+- Auth page provider check: both sign-in and sign-up render Google, GitHub, LinkedIn, and Microsoft; Facebook is absent.
+- The smoke-test production server was stopped after checks.
 
-## Required deployment actions
+## External Validation Still Required
 
-1. Apply `supabase/migrations/20261121050000_profile_and_auth_enhancements.sql` after the earlier schema/migrations.
-2. Configure `GEMINI_API_KEY` and the server-only `SUPABASE_SERVICE_ROLE_KEY` for coursework analysis and secure knowledge-check grading.
-3. Configure OAuth provider credentials and redirect URLs in Supabase Auth.
-4. Configure optional YouTube and email integration credentials where those services are used.
-
-## Validation status
-
-
-
-- Coursework upload currently supports PDF and plain text files up to 4 MB; DOCX parsing is not included.
-- Theory certificates validate a generated knowledge check and remain distinct from project-evidence/industry certificates. They do not prove professional experience.
-- Opportunity matching deliberately uses exact normalized skill and career-goal matches. It does not infer eligibility or guarantee an employer response, selection or payment.
-- Provider authentication, outbound email and live YouTube discovery require valid external configuration.
-
-
-
-## Automated build result
-
-Dependencies could not be installed and the production build was not run. Install with `npm ci` in an environment with registry access, then run `npm run build`.
+- No SQL was applied to the live Supabase database. `psql` was unavailable, so SQL syntax/catalog checks were not executed against a local PostgreSQL instance. Run the preflight and postflight SQL against the intended database under the ordered procedure in `docs/DATABASE-MIGRATIONS.md`.
+- Live registration, email confirmation, password reset, remember-me persistence, logout, and authenticated session restoration require a test account; they were not completed in this HTTP-only smoke test.
+- Google, GitHub, LinkedIn OIDC, and Microsoft OAuth each require provider credentials and redirect allowlists; provider-by-provider login remains unverified.
+- Company DNS proof, administrator approval, opportunity publishing/application, evidence submission/review, and owner-only admin actions require a configured test database and role accounts; these were not exercised end to end.
+- Vercel's configured Production Branch and current live deployment were not accessible through this workspace. The local branch is `master`; do not push there until Vercel settings are verified. No Production deployment was changed.

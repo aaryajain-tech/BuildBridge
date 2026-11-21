@@ -56,7 +56,7 @@ The exact user-supplied BuildBridge logo artwork is used in the public landing p
 
 - The visual system uses the exact supplied BuildBridge logo artwork, a light-peach application canvas, warm ivory cards, deep navy navigation, mint/teal actions and violet secondary accents. Body copy, labels, navigation and helper text have been increased for readability.
 - The “Your Build Journey” header is visible at the top of workspace pages, with a different illustration for each step. Its six-step guide automatically advances every 4 seconds (unless reduced motion is enabled). Users can pause/resume it, select a step, navigate to the relevant workspace, or hide/show the walkthrough.
-- The public landing page, auth pages and authenticated workspaces are separate routes. Supabase SSR cookies and PKCE protect server-rendered `/workspace` and project detail pages. Email/password and Google, GitHub, Microsoft and Facebook sign-in use the callback at `/auth/callback`; each provider still requires real credentials in Supabase.
+- The public landing page, auth pages and authenticated workspaces are separate routes. Supabase SSR cookies and PKCE protect server-rendered `/workspace` and project detail pages. Email/password and Google, GitHub, LinkedIn OIDC and Microsoft/Azure sign-in use the callback at `/auth/callback`; each provider still requires real credentials in Supabase.
 - New accounts always start as students regardless of signup metadata. Company access requires a confirmed organization email, DNS ownership proof, and a separate administrator decision. Company verification and publishing authorization remain additional checks.
 - Notification records and per-user preferences are stored in Supabase. Email is queued and sent by the scheduled `/api/cron/notifications` worker; failures are logged and retried. Email delivery requires a verified Resend sender and server-only secrets.
 - `/api/health` reports whether the deployment has Supabase/Gemini/YouTube configuration and whether the server can reach Supabase. It does not expose credentials. Open `/api/health` on your local or deployed app to inspect it.
@@ -68,104 +68,13 @@ The exact user-supplied BuildBridge logo artwork is used in the public landing p
 
 Requires **Node.js 22+**. On Windows PowerShell, use `npm.cmd` if script execution policy blocks `npm.ps1`.
 
-### 1. Install
+For Windows installation and local run instructions, see [`QUICKSTART-WINDOWS.md`](QUICKSTART-WINDOWS.md). Use `npm.cmd ci` for a clean install.
 
-```powershell
-npm.cmd install
-```
+For database operations, see [`docs/DATABASE-MIGRATIONS.md`](docs/DATABASE-MIGRATIONS.md). It distinguishes a fresh Supabase installation from an existing BuildBridge database and starts existing-database work with read-only preflight SQL. Do not run `database-schema.sql` against Production or replay the older `supabase/project-marketplace.sql` after the versioned project workflow migration.
 
-### 2. Configure Supabase
+For OAuth providers, Vercel Preview/Production environment configuration, branch validation and rollback, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Google Cloud's authorized redirect URI must be Supabase's `/auth/v1/callback`; BuildBridge's `/auth/callback` belongs in the Supabase Auth redirect allowlist.
 
-1. Create a Supabase project.
-2. Open the SQL Editor and run [`database-schema.sql`](./database-schema.sql) once on a fresh project. Then run [`supabase/auth-setup-repair.sql`](./supabase/auth-setup-repair.sql) to install/repair the profile trigger, auth profile bootstrap, recursion-safe profile policies, API grants and private evidence bucket. Run [`supabase/profile-details.sql`](./supabase/profile-details.sql) for phone/photo fields, [`supabase/learning-ai.sql`](./supabase/learning-ai.sql) for persisted learning features, [`supabase/project-marketplace.sql`](./supabase/project-marketplace.sql) for project metadata, assignments, milestone/evidence tracking, marketplace RLS, and original BuildBridge Practice Projects, followed by [`supabase/certificate-redesign.sql`](./supabase/certificate-redesign.sql) for evidence-backed certificates, explicit company signatory authorization, and public verification. Then apply [`supabase/migrations/20261121030000_project_assignment_milestone_workflow.sql`](./supabase/migrations/20261121030000_project_assignment_milestone_workflow.sql), followed by [`supabase/migrations/20261121040000_platform_identity_notifications.sql
-- `supabase/migrations/20261121050000_profile_and_auth_enhancements.sql``](./supabase/migrations/20261121040000_platform_identity_notifications.sql
-- `supabase/migrations/20261121050000_profile_and_auth_enhancements.sql`). These additive migrations add assignment attribution, secure company-domain onboarding, one-owner admin enforcement, preferences, notification records and the email outbox. Back up the project and review the SQL before applying it to a hosted database. Do not execute it from the application.
-   If no admin account exists yet, practice briefs remain drafts until an admin publishes them. After provisioning the admin, publish eligible drafts from **Admin → Project moderation and practice publishing**. Do not rerun the older marketplace SQL after applying the versioned workflow migration; it would replace some of the newer trigger functions.
-   If the app reports that it cannot find a relationship between `projects` and `project_milestones`, run [`supabase/project-milestone-relationship-repair.sql`](./supabase/project-milestone-relationship-repair.sql) in the SQL Editor. It ensures the milestone foreign key exists and asks PostgREST to reload its schema cache.
-   After applying the marketplace, certificate, and versioned workflow SQL, the read-only [`supabase/project-workflow-verification.sql`](./supabase/project-workflow-verification.sql) reports RLS, foreign keys, policies, and workflow consistency checks.
-3. Create a private Storage bucket named `project-evidence` (10 MB file limit recommended). If the schema setup creates it automatically, confirm it is private.
-4. Copy the project URL and anon/publishable key from Project Settings → API. Keep the service-role key server-only.
-5. Create `.env.local` from `.env.example` and set:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY
-GEMINI_API_KEY=YOUR_GEMINI_API_KEY
-GEMINI_MODEL=gemini-3.8-flash
-YOUTUBE_API_KEY=YOUR_YOUTUBE_DATA_API_V3_KEY
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-APP_BASE_URL=http://localhost:3000
-ADMIN_OWNER_EMAIL=your-confirmed-deployer-email@example.com
-SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVER_ONLY_SERVICE_ROLE_KEY
-RESEND_API_KEY=YOUR_RESEND_API_KEY
-EMAIL_FROM=notifications@your-verified-domain.example
-EMAIL_FROM_NAME=BuildBridge
-CRON_SECRET=YOUR_LONG_RANDOM_CRON_SECRET
-UNSUBSCRIBE_TOKEN_SECRET=YOUR_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
-```
-
-Never put a Supabase service-role, Resend, Gemini, YouTube, cron, or unsubscribe key in a `NEXT_PUBLIC_` variable or commit `.env.local`. `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `CRON_SECRET`, `UNSUBSCRIBE_TOKEN_SECRET`, and `ADMIN_OWNER_EMAIL` are server-only.
-
-The Learn page uses `YOUTUBE_API_KEY` on the server to fetch real YouTube video results and public video details. In Google Cloud Console, enable **YouTube Data API v3**, create a key, and restrict it to that API. Store the key in `.env.local` and restart the app. Live AI mentoring and Gemini-generated roadmaps require `GEMINI_API_KEY`; without it, those requests show an explicit configuration error rather than simulated output.
-
-### 3. Configure social sign-in (Google, Microsoft, GitHub, Facebook)
-
-BuildBridge uses Supabase SSR with PKCE. The app contains buttons for these providers, but **each provider must be configured in Supabase before its button can complete sign-in**. Provider client IDs/secrets belong in Supabase Auth settings, not in `.env.local`.
-
-1. Open **Supabase Dashboard → Authentication → Sign In / Providers**.
-2. Expand each provider you want to enable and copy its Supabase callback URL. It normally looks like `https://<project-ref>.supabase.co/auth/v1/callback`.
-3. Create an OAuth application with the corresponding identity provider and add that exact Supabase callback URL as its redirect/callback URI.
-4. Paste that provider's client ID and client secret into the matching Supabase provider settings and enable it.
-5. In **Supabase → Authentication → URL Configuration**, set the local Site URL to `http://localhost:3000` and allow `http://localhost:3000/auth/callback`. For production, allow `https://build-bridge-kappa.vercel.app/auth/callback` or your actual deployment callback URL.
-6. For Microsoft, BuildBridge requests the `email` scope as required by Supabase Azure Auth. Supabase redirects to `/auth/callback`, which exchanges the PKCE code and persists the session in secure cookies.
-
-Provider-specific setup references:
-- Google: https://supabase.com/docs/guides/auth/social-sign-in/auth-google
-- Microsoft / Azure: https://supabase.com/docs/guides/auth/social-sign-in/auth-azure
-- GitHub: https://supabase.com/docs/guides/auth/social-sign-in/auth-github
-- Facebook: https://supabase.com/docs/guides/auth/social-sign-in/auth-facebook
-
-Admin can never be requested through OAuth or public signup. A new company representative signs up as a student, then opens **Profile → Company account access** and completes the DNS proof and administrator approval process. This grants company-account access only; the organization must still be verified before it can publish projects or approve evidence.
-
-### 4. Provision the deployer-only admin
-
-1. Sign up normally with your own deployer email and confirm the email address.
-2. Set `ADMIN_OWNER_EMAIL` to that exact confirmed address in the server environment.
-3. Open `supabase/provision-admin.sql` and replace `YOUR_DEPLOYER_EMAIL@example.com` with that exact address.
-4. Run the script from the Supabase SQL Editor while signed in as the project owner. It provisions the single database owner used by the RLS admin helper.
-5. Confirm the verification query returns exactly your account with role `admin`.
-
-Public sign-up always creates a student profile; metadata cannot grant company or admin access. The database allows only one admin and binds RLS admin access to the provisioned owner record. The application also requires `ADMIN_OWNER_EMAIL` to match the confirmed auth email. Keep Supabase project-owner credentials private.
-
-### 5. Configure company domain verification and email
-
-1. Apply `supabase/migrations/20261121040000_platform_identity_notifications.sql
-- `supabase/migrations/20261121050000_profile_and_auth_enhancements.sql`` after the project assignment workflow migration. It adds company domain requests, in-app notifications, preferences, a private email outbox, delivery logs and deadline reminder deduplication.
-2. Configure a verified sender domain in Resend, then set `RESEND_API_KEY`, `EMAIL_FROM`, and optionally `EMAIL_FROM_NAME`.
-3. Set `SUPABASE_SERVICE_ROLE_KEY` only in the server environment; it is used for domain review and the scheduled outbox worker.
-4. Set `APP_BASE_URL` to the canonical site origin, `CRON_SECRET` to a long random secret, and `UNSUBSCRIBE_TOKEN_SECRET` to a different random secret of at least 32 characters.
-5. `vercel.json` schedules `/api/cron/notifications` daily at 08:00 UTC. Configure the Vercel environment variable `CRON_SECRET`; Vercel sends it as a bearer token. For local checks, invoke the route with `Authorization: Bearer <CRON_SECRET>`.
-6. A company requester adds the DNS TXT record shown in **Profile → Company account access**. The configured admin approves or rejects the domain request under **Admin → Company Verification**. This does not mark a company verified.
-
-### 6. Run the app
-
-```powershell
-npm.cmd run dev
-```
-
-Open `http://localhost:3000`.
-
-### 7. Check before deployment
-
-```powershell
-npm.cmd run typecheck
-npm.cmd run lint
-npm.cmd run build
-```
-
-### Vercel
-
-Import the public GitHub repository into Vercel and add the same environment variables in Project Settings → Environment Variables. Redeploy after adding/changing them. Test student, company and deployer-admin accounts separately in a private browser window.
+Public sign-up always creates a student. Company access requires confirmed email, DNS ownership proof and administrator approval; organization publishing is verified separately. Admin access requires the one manually provisioned, confirmed owner to match both `ADMIN_OWNER_EMAIL` and `platform_admin_owner`.
 
 ## Important operating rules
 
@@ -216,6 +125,10 @@ This package is the current runnable implementation scaffold based on the suppli
 
 See `QUICKSTART-WINDOWS.md` for the fastest local run path.
 
+## Demo mode
+
+Open `/demo` to explore a local, no-login workspace using sample student data. Switch roles with `/demo?role=company` or `/demo?role=admin`. Demo mode does not connect to Supabase or create database records.
+
 
 ## Latest additive migration
 
@@ -225,7 +138,7 @@ Apply `supabase/migrations/20261121050000_profile_and_auth_enhancements.sql` aft
 
 ### Authentication and profile
 
-- Sign-in and registration support Google, GitHub, LinkedIn OIDC, Microsoft/Azure and Facebook. Configure each provider in Supabase Auth and register the Supabase OAuth callback URL with the provider. The application callback is `/auth/callback` on the deployed BuildBridge origin.
+- Sign-in and registration support Google, GitHub, LinkedIn OIDC and Microsoft/Azure. Configure each provider in Supabase Auth and register the Supabase OAuth callback URL with the provider. The application callback is `/auth/callback` on the deployed BuildBridge origin.
 - A public signup choice of Student or Company representative is onboarding intent only. All newly created profiles remain `student`; company access is granted only after the existing company-domain verification and administrator approval flow. Never change the database trigger to trust a client-provided role.
 - Phone number is optional and stored in E.164 format when valid. Remember me controls the Supabase auth cookie lifetime; unchecked sessions use browser-session cookies rather than storing auth tokens in localStorage.
 - Profile education, coursework, location and professional links are saved through the authenticated preferences API. Avatar storage remains private.

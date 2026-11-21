@@ -24,22 +24,36 @@ export async function GET(request: NextRequest) {
   const providerError = request.nextUrl.searchParams.get('error_description') || request.nextUrl.searchParams.get('error');
   const next = safeInternalNext(request.nextUrl.searchParams.get('next'));
   const supabase = await createClient();
-  if (!supabase) return NextResponse.redirect(new URL('/auth/sign-in?error=not_configured', request.url));
-  if (providerError) {
+  const signInWithError = (message: string) => {
     const signIn = new URL('/auth/sign-in', request.url);
-    signIn.searchParams.set('error', providerError.slice(0, 300));
+    signIn.searchParams.set('error', message.slice(0, 300));
+    signIn.searchParams.set('next', next);
     return NextResponse.redirect(signIn);
+  };
+  if (!supabase) return signInWithError('Supabase authentication is not configured.');
+  if (providerError) {
+    const message = /provider.*(not enabled|not configured)|unsupported provider/i.test(providerError)
+      ? 'This identity provider is not enabled in Supabase.'
+      : providerError;
+    return signInWithError(message);
   }
-  if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      const signIn = new URL('/auth/sign-in', request.url);
-      signIn.searchParams.set('error', error.message.slice(0, 300));
-      return NextResponse.redirect(signIn);
+  let destination = next;
+  try {
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) return signInWithError(error.message);
     }
-  } else {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.redirect(new URL('/auth/sign-in?error=missing_auth_code', request.url));
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error) return signInWithError(error.message);
+    if (!user) return signInWithError(code ? 'The Supabase session could not be restored.' : 'The identity provider callback did not include an authentication code.');
+    if (next === '/workspace') {
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+      if (profile?.role === 'student') destination = '/student/dashboard';
+      else if (profile?.role === 'company_member') destination = '/company/dashboard';
+      else if (profile?.role === 'admin') destination = '/admin';
+    }
+  } catch {
+    return signInWithError('Could not complete the Supabase session exchange. Check your network and try signing in again.');
   }
-  return NextResponse.redirect(new URL(next, request.url));
+  return NextResponse.redirect(new URL(destination, request.url));
 }

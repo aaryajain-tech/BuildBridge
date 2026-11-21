@@ -13,14 +13,15 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const quizId = typeof body.quizId === 'string' ? body.quizId.trim() : '';
-  const answers = Array.isArray(body.answers) ? body.answers : [];
+  const rawAnswers: unknown[] = Array.isArray(body.answers) ? body.answers : [];
   if (!quizId) return NextResponse.json({ error: 'Choose a knowledge check first.' }, { status: 400 });
   const { data: quiz, error: quizError } = await supabase.from('coursework_quizzes')
     .select('id,coursework_map_id,course_name,questions').eq('id', quizId).eq('student_user_id', user.id).maybeSingle();
   if (quizError) return NextResponse.json({ error: `Knowledge check could not be loaded: ${quizError.message}` }, { status: 400 });
   if (!quiz) return NextResponse.json({ error: 'This knowledge check is not available to your account.' }, { status: 404 });
   const questions = Array.isArray(quiz.questions) ? quiz.questions : [];
-  if (questions.length < 4 || answers.length !== questions.length || answers.some(answer => !Number.isInteger(answer) || answer < 0 || answer > 3)) {
+  const answers = rawAnswers.filter((answer): answer is number => typeof answer === 'number' && Number.isInteger(answer) && answer >= 0 && answer <= 3);
+  if (questions.length < 4 || rawAnswers.length !== questions.length || answers.length !== rawAnswers.length) {
     return NextResponse.json({ error: `Answer all ${questions.length} questions before submitting.` }, { status: 400 });
   }
   const admin = createAdminClient();

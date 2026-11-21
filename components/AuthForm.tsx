@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient, setRememberPreference } from '@/lib/supabase';
+import { getSupabaseConfiguration, supabaseConfigurationMessage } from '@/lib/supabase-config';
 import { SocialAuthButtons, type SocialProvider } from '@/components/SocialAuthButtons';
 
 type AuthMode = 'sign-in' | 'sign-up' | 'forgot' | 'reset';
@@ -23,7 +24,14 @@ function safeNext(value: string | null) {
 function signupDestination(intent: AccountIntent) {
   const query = new URLSearchParams({ screen: intent === 'company_member' ? 'Profile' : 'Dashboard' });
   if (intent === 'company_member') query.set('accountType', 'company_member');
-  return `/workspace?${query.toString()}`;
+  return `/student/dashboard?${query.toString()}`;
+}
+
+function dashboardForRole(role: unknown) {
+  if (role === 'company_member') return '/company/dashboard';
+  if (role === 'admin') return '/admin';
+  if (role === 'student') return '/student/dashboard';
+  return '/workspace';
 }
 
 function callbackUrl(origin: string, next: string) {
@@ -86,16 +94,22 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     setRememberPreference(keepSession);
     const supabase = createClient({ rememberMe: keepSession });
     if (!supabase) {
-      setError('Sign-in is not configured. Contact the BuildBridge administrator.');
+      const configuration = getSupabaseConfiguration();
+      setError(configuration.error ? supabaseConfigurationMessage(configuration.error) : 'Supabase authentication is unavailable.');
       return;
     }
 
     setBusy(true);
     try {
       if (mode === 'sign-in') {
-        const { error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        const { data, error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (authError) throw authError;
-        const next = safeNext(new URLSearchParams(window.location.search).get('next'));
+        const requestedNext = new URLSearchParams(window.location.search).get('next');
+        let next = safeNext(requestedNext);
+        if (!requestedNext && data.user) {
+          const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
+          next = dashboardForRole(profile?.role);
+        }
         router.replace(next);
         router.refresh();
       } else if (mode === 'sign-up') {
@@ -135,7 +149,12 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         setPassword('');
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The request could not be completed.');
+      const message = cause instanceof Error ? cause.message : 'The request could not be completed.';
+      setError(/invalid login credentials|invalid credentials/i.test(message)
+        ? 'Supabase rejected these credentials. Check the email and password, then try again.'
+        : /fetch|network|failed to fetch/i.test(message)
+          ? 'Could not reach Supabase. Check the project URL and network connection, then try again.'
+          : message);
     } finally {
       setBusy(false);
     }
@@ -148,22 +167,31 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     setRememberPreference(keepSession);
     const supabase = createClient({ rememberMe: keepSession });
     if (!supabase) {
-      setError('Sign-in is not configured. Contact the BuildBridge administrator.');
+      const configuration = getSupabaseConfiguration();
+      setError(configuration.error ? supabaseConfigurationMessage(configuration.error) : 'Supabase authentication is unavailable.');
       return;
     }
     const destination = mode === 'sign-up'
       ? signupDestination(role)
       : safeNext(new URLSearchParams(window.location.search).get('next'));
     setBusy(true);
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: callbackUrl(window.location.origin, destination),
-        ...(provider === 'azure' ? { scopes: 'email' } : {}),
-      },
-    });
-    if (authError) {
-      setError(authError.message);
+    try {
+      const { error: authError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: callbackUrl(window.location.origin, destination),
+          ...(provider === 'azure' ? { scopes: 'email' } : {}),
+        },
+      });
+      if (authError) throw authError;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'The identity provider request could not be completed.';
+      setError(/provider.*(not enabled|not configured)|unsupported provider/i.test(message)
+        ? `This identity provider is not enabled in Supabase: ${provider}.`
+        : /fetch|network|failed to fetch/i.test(message)
+          ? 'Could not reach Supabase. Check the project URL and network connection, then try again.'
+          : message);
+    } finally {
       setBusy(false);
     }
   }
@@ -198,6 +226,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     {mode === 'sign-in' && <>
       <button className="text-btn auth-forgot" type="button" onClick={()=>router.push('/auth/forgot-password')}>Forgot password?</button>
       <p className="auth-switch">New to BuildBridge? <Link href="/auth/sign-up">Create account</Link></p>
+      <p className="auth-switch"><Link href="/demo">Explore the no-login demo workspace</Link></p>
     </>}
     {mode === 'sign-up' && <p className="auth-switch">Already have an account? <Link href="/auth/sign-in">Sign in</Link></p>}
     {mode === 'forgot' && <p className="auth-switch"><Link href="/auth/sign-in">Return to sign in</Link></p>}

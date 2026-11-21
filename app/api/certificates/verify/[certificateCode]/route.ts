@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseConfiguration, supabaseConfigurationMessage } from '@/lib/supabase-config';
 
 type RouteContext = { params: Promise<{ certificateCode: string }> };
 
@@ -12,10 +13,9 @@ export async function GET(_req: Request, { params }: RouteContext) {
     if (!isProjectCertificate && !isTheoryCertificate) {
       return NextResponse.json({ error: 'Enter a valid BuildBridge certificate ID.' }, { status: 400 });
     }
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-    if (!url || !key) return NextResponse.json({ error: 'Certificate verification is not configured.' }, { status: 503 });
-    const supabase = createClient(url, key, {
+    const configuration = getSupabaseConfiguration();
+    if (configuration.error) return NextResponse.json({ error: supabaseConfigurationMessage(configuration.error) }, { status: 503 });
+    const supabase = createClient(configuration.url, configuration.key, {
       auth: { flowType: 'implicit', persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
     const { data, error } = isTheoryCertificate

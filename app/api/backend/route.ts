@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getProfileRole } from '@/lib/api-auth';
+import { getSupabaseConfiguration } from '@/lib/supabase-config';
 
 type UserRole = 'student' | 'company_member' | 'admin';
 
 function getAuthedClient(token: string) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, {
+  const configuration = getSupabaseConfiguration();
+  if (configuration.error) return null;
+  return createClient(configuration.url, configuration.key, {
     auth: { flowType: 'implicit', persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
   });

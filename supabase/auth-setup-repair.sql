@@ -8,6 +8,16 @@ alter table public.profiles add column if not exists career_goal text;
 create unique index if not exists one_platform_admin on public.profiles(role) where role = 'admin';
 create unique index if not exists companies_one_per_owner on public.companies(owner_user_id);
 
+create table if not exists public.platform_admin_owner (
+  singleton boolean primary key default true check (singleton),
+  owner_user_id uuid not null unique references public.profiles(id),
+  owner_email text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.platform_admin_owner enable row level security;
+revoke all on public.platform_admin_owner from public, anon, authenticated;
+grant all on public.platform_admin_owner to service_role;
+
 -- Public auth metadata never grants company or admin access.
 create or replace function public.handle_new_user()
 returns trigger
@@ -78,7 +88,18 @@ create or replace function public.is_platform_admin()
 returns boolean
 language sql stable security definer
 set search_path = public, pg_temp
-as $$ select coalesce((select p.role = 'admin'::public.app_role from public.profiles p where p.id = auth.uid()), false) $$;
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    join public.platform_admin_owner owner
+      on owner.owner_user_id = p.id
+      and lower(owner.owner_email) = lower(p.email)
+    where p.id = auth.uid()
+      and p.role = 'admin'::public.app_role
+      and lower(coalesce(auth.jwt()->>'email', '')) = lower(p.email)
+  )
+$$;
 
 revoke all on function public.current_user_role() from public, anon;
 revoke all on function public.is_platform_admin() from public, anon;

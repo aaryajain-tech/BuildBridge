@@ -1,97 +1,87 @@
-# BuildBridge deployment guide
+# BuildBridge Deployment and Rollback
 
-This guide covers the current Next.js + Supabase project. Deploying the frontend does not automatically apply SQL migrations or configure external provider credentials.
+Vercel deployment and Supabase migration are separate operations. A successful frontend deployment does not apply SQL or configure authentication providers.
 
-## 1. Prepare the repository
+## Local Validation
 
-1. Extract the updated BuildBridge project and push it to a private or public GitHub repository.
-2. Confirm `package.json` and `package-lock.json` are committed.
-3. Do not commit `.env.local`, Supabase service-role keys, OAuth client secrets or Gemini keys.
+Use Node.js 22 or newer. From PowerShell in the repository root:
 
-## 2. Apply Supabase migrations
-
-Apply the existing database scripts in the order documented in `README.md`. Apply the new additive migration last:
-
-`supabase/migrations/20261121050000_profile_and_auth_enhancements.sql`
-
-It adds profile columns, coursework mapping and theory-assessment tables, structured opportunity requirements, the related RLS policies, and the public theory-certificate verification function. It does not replace the existing project-assignment, milestone-submission, company-verification or industry-certificate workflows.
-
-After applying, run a schema reload in Supabase if the API does not immediately recognize the new columns and tables. Do not drop or recreate existing production tables to apply this migration.
-
-## 3. Configure Supabase Auth
-
-In Supabase Auth > URL Configuration:
-
-- Set the Site URL to the deployed BuildBridge origin.
-- Add the production and preview callback URLs that you actually use, ending in `/auth/callback`.
-- Add `http://localhost:3000/auth/callback` for local development.
-
-Enable and configure each provider that you intend to offer: Google, GitHub, LinkedIn OIDC, Microsoft (Azure) and Facebook. Add each provider's client ID and secret in Supabase Auth. Provider-specific redirect URIs must point to your Supabase project's Auth callback, usually `https://<project-ref>.supabase.co/auth/v1/callback`.
-
-The company-representative option during signup is an onboarding request, not an authorization grant. Keep the database profile trigger's default role as `student`; only the existing verified-company and administrator-approval workflow may grant `company_member` access.
-
-## 4. Configure Vercel
-
-1. Import the GitHub repository into Vercel.
-2. Keep the detected Next.js framework and the repository's package scripts. Use `npm ci` for installation and `npm run build` for production builds.
-3. Set the Node.js runtime to a version supported by the current Next.js dependency in `package.json` (Node 20 LTS or newer is recommended).
-4. Add the environment variables below to the Production environment. Add Preview values separately; never copy production secrets into untrusted preview deployments.
-5. Deploy, then test signup, login, callback, profile save, workspace data, one project workflow and one certificate verification.
-
-### Required environment
-
-| Variable | Purpose |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Client-safe Supabase key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-only coursework quiz creation/grading and other privileged server operations; never expose it to the browser |
-| `GEMINI_API_KEY` | AI Mentor, syllabus analysis and knowledge-check generation |
-
-### Optional integrations
-
-| Variable | Purpose |
-|---|---|
-| `GEMINI_MODEL` | Override the Gemini model; defaults to the value in the API route |
-| `YOUTUBE_API_KEY` | YouTube lesson discovery |
-| `RESEND_API_KEY` | Existing email delivery integration |
-| `CRON_SECRET` | Protect scheduled notification/email worker endpoints |
-| `ADMIN_OWNER_EMAIL` | Email used by the existing first-admin provisioning workflow |
-
-Only variables whose names begin with `NEXT_PUBLIC_` are intended to be exposed to browser code. Keep the service-role key, AI key, Resend key and cron secret server-only.
-
-## 5. Local development
-
-```bash
-cp .env.example .env.local
-# Add your own Supabase, Gemini and optional integration credentials.
-npm ci
-npm run dev
+```powershell
+node --version
+npm.cmd ci
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd run build
 ```
 
-Open `http://localhost:3000`. To run the production compiler locally:
+Copy `.env.example` to `.env.local` and use a non-production Supabase project for local work. The public landing page and build must work without API credentials. Auth, profile, data, AI and email operations require the respective real service configuration and should show an actionable error when it is absent.
 
-```bash
-npm run build
-npm run start
+Smoke-test local rendering and unauthenticated protection:
+
+```powershell
+npm.cmd run start
+Invoke-WebRequest http://localhost:3000/
+Invoke-WebRequest http://localhost:3000/auth/sign-in
+Invoke-WebRequest http://localhost:3000/api/health -SkipHttpErrorCheck
+Invoke-WebRequest http://localhost:3000/workspace -MaximumRedirection 0 -SkipHttpErrorCheck
 ```
 
-## 6. End-to-end smoke tests
+The health endpoint returns `503` until Supabase is configured and reachable. An unauthenticated workspace request should redirect to sign-in when Supabase is configured; without Supabase it renders a configuration message instead.
 
-- Register as a student and verify the email confirmation flow.
-- Register with the company-representative intent and confirm it does not grant company permissions before domain verification and administrator approval.
-- Test Remember me both checked and unchecked in separate browser sessions.
-- Test at least one configured OAuth provider and verify its redirect returns to the intended workspace screen.
-- Complete and refresh a profile; confirm degree, department, academic year, GPA, coursework and links persist.
-- Upload a non-confidential PDF or text syllabus (maximum 4 MB), inspect the structured concept/skill/project map, complete the generated knowledge check and test the separate `BBT-...` theory certificate verification.
-- Play a YouTube lesson in the embedded player and confirm completion is recorded only after at least 90% continuous playback.
-- Verify a company, create an opportunity draft, publish it, and confirm the student view explains exact demonstrated-skill/career-goal matches and shows the application status.
-- Click a notification and confirm it opens the relevant workspace section.
-- Switch browser tabs and return; confirm the workspace stays on the same screen and refreshes data instead of resetting to Dashboard.
+## Supabase Setup
 
-## 7. Known constraints
+Follow [`DATABASE-MIGRATIONS.md`](DATABASE-MIGRATIONS.md) for the correct fresh-versus-existing database procedure. Take a backup and run the read-only preflight first for an existing database. Vercel does not run these SQL files.
 
-- OAuth providers require credentials and redirect configuration in Supabase; their buttons cannot complete authentication until configured.
-- Coursework upload accepts PDF and plain text (`.txt`, `.md`, `.csv`) up to 4 MB. DOCX, password-protected PDFs and scanned files that Gemini cannot read are not guaranteed.
-- Coursework analysis needs `GEMINI_API_KEY`. Secure quiz creation and grading also need `SUPABASE_SERVICE_ROLE_KEY` configured only on the server.
-- Opportunity publishing requires an administrator-verified company. Matching is intentionally conservative and uses exact normalized skill-name matches rather than guessing synonyms.
-- This repository package does not contain production credentials or a deployed Vercel project. Deployment and provider configuration must be completed in the owner's accounts.
+Set public variables `NEXT_PUBLIC_SUPABASE_URL`, one of `NEXT_PUBLIC_SUPABASE_ANON_KEY` or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_APP_URL`. Server-only variables are `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_OWNER_EMAIL`, `GEMINI_API_KEY`, `RESEND_API_KEY`, `CRON_SECRET`, `UNSUBSCRIBE_TOKEN_SECRET`, and `APP_BASE_URL`. Optional variables are `YOUTUBE_API_KEY`, `EMAIL_FROM`, `EMAIL_FROM_NAME`, and `GEMINI_MODEL`. Never put a server secret in a `NEXT_PUBLIC_` variable or commit `.env.local`.
+
+### OAuth Redirects
+
+For every provider, set its client ID and secret in Supabase Authentication, not in this repository. Add each exact application callback to Supabase Authentication → URL Configuration → Redirect URLs:
+
+- `http://localhost:3000/auth/callback`
+- The exact Vercel Preview origin followed by `/auth/callback`
+- The production origin followed by `/auth/callback`
+
+Register the Supabase callback URL, normally `https://<project-ref>.supabase.co/auth/v1/callback`, with the identity provider. In particular, Google Cloud's authorized redirect URI remains this Supabase URL; it is not the BuildBridge `/auth/callback` URL. BuildBridge passes its current origin and requested internal destination through Supabase. Provider identifiers are Google `google`, GitHub `github`, LinkedIn `linkedin_oidc`, and Microsoft `azure`. Test each provider separately after configuring its credentials. Preview and production domains may need separate provider allowlists.
+
+Set the Supabase Site URL to the canonical production origin. For email confirmation and password recovery, also allow the local, Preview and Production application callback paths. Do not use a broad wildcard unless the project owner has reviewed its scope.
+
+## Vercel Preview and Production
+
+1. In Vercel Project Settings → Git, record the configured **Production Branch** and current Production domain before pushing. The current local Git branch is `master`, but that alone does not establish Vercel's production-branch setting. Do not change that setting as part of this repair.
+2. Keep the existing live Production deployment intact. Push the repair to a separate non-production branch and open a pull request. Confirm Vercel labels the resulting deployment **Preview**, not Production. If the configured production branch is `master`, do not push test commits directly to `master`.
+3. Configure Preview variables separately, preferably with a dedicated test Supabase project and test provider credentials. Never copy production service-role, mail, AI or cron secrets into an untrusted Preview environment. Set the Preview `NEXT_PUBLIC_APP_URL` and `APP_BASE_URL` to the exact Preview origin when those are used.
+4. Add that exact Preview callback URL to the test Supabase Auth allowlist and to the relevant OAuth provider's application settings. Verify email confirmation, reset-password, session restoration and logout on the Preview domain.
+5. Run the automated checks and test role journeys on Preview. Run Supabase preflight/postflight against the intended database separately; a successful Preview build does not prove a migration is safe or applied.
+6. Only after Preview acceptance, merge through the repository's normal review process into the Production Branch shown in Vercel settings. Do not force-push, delete branches, alter deployment settings, or promote an untested deployment.
+7. Verify Vercel marks the new deployment **Production**, check `/api/health`, then smoke-test the public page, sign-in, callback and authenticated role dashboards. Check Vercel logs without exposing environment values.
+
+## Environment Variables
+
+| Variable | Scope |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Public Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Public client key; configure one |
+| `NEXT_PUBLIC_APP_URL` | Public canonical application origin |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only privileged database/auth operations |
+| `ADMIN_OWNER_EMAIL` | Server-only confirmed, manually provisioned platform owner email |
+| `GEMINI_API_KEY` | Server-only AI Mentor and coursework generation |
+| `RESEND_API_KEY` | Server-only email delivery |
+| `CRON_SECRET` | Server-only scheduled-job authorization |
+| `UNSUBSCRIBE_TOKEN_SECRET` | Server-only unsubscribe token signing secret |
+| `APP_BASE_URL` | Server-side canonical links and email URLs |
+| `YOUTUBE_API_KEY` | Optional server-side YouTube Data API |
+| `EMAIL_FROM`, `EMAIL_FROM_NAME` | Optional verified mail sender |
+| `GEMINI_MODEL` | Optional model override |
+
+Configure the notification cron variables before expecting email. A notification is not reported as delivered unless the provider returns a successful response.
+
+## Rollback
+
+For a failed frontend deployment, use Vercel's rollback to the last known-good Production deployment, or revert the repair commit with a new commit and deploy that through the normal branch process. Confirm the selected build was previously validated; do not promote an untested artifact. Do not force-push or change the configured Production Branch.
+
+Frontend rollback does not reverse database migrations, OAuth settings, or records. Use the reviewed Supabase backup only under the database recovery plan. Otherwise fix forward with a new additive migration; do not drop tables, remove policies indiscriminately, or run the initial schema against Production.
+
+## Acceptance Tests Requiring External Services
+
+After Preview configuration, test: student signup/email confirmation/login/refresh/logout; each enabled OAuth provider; company request → DNS TXT verification → owner approval → company role; ordinary-user denial at `/admin`; verified-company opportunity publish and student application; student evidence submission and assigning-company review; email unsubscribe and notification delivery. These flows require real Supabase, DNS, OAuth, email and/or Gemini configuration and cannot be certified from a local compile alone.

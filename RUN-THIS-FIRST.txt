@@ -9,6 +9,6 @@ BuildBridge - Real authentication quick start
 7. Open http://localhost:3000 and create a real account or sign in. No preview or demo access is provided.
 
 For email confirmation, check your inbox and confirm the account before signing in.
-For Google/GitHub/Microsoft/Facebook, configure the provider Client ID and Secret in Supabase Authentication > Sign In / Providers and add http://localhost:3000/** to Supabase Auth Redirect URLs.
+For Google, GitHub, LinkedIn OIDC or Microsoft/Azure, configure the provider Client ID and Secret in Supabase Authentication > Sign In / Providers and add http://localhost:3000/auth/callback to Supabase Auth Redirect URLs.
 
 To stop a running server, press Ctrl+C on your keyboard. Do not type Ctrl+C as a command.

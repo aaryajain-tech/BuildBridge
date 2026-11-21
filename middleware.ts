@@ -1,14 +1,14 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getSupabaseConfiguration } from '@/lib/supabase-config';
 
 export async function middleware(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return NextResponse.next({ request });
+  const configuration = getSupabaseConfiguration();
+  if (configuration.error) return NextResponse.next({ request });
 
   let response = NextResponse.next({ request });
   const sessionOnly = request.cookies.get('buildbridge-remember')?.value === 'session';
-  const supabase = createServerClient(url, key, {
+  const supabase = createServerClient(configuration.url, configuration.key, {
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll(cookiesToSet, cacheHeaders) {
